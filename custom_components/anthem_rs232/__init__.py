@@ -22,7 +22,13 @@ if TYPE_CHECKING:
 
     from .data import AnthemConfigEntry
 
-PLATFORMS: list[Platform] = [Platform.MEDIA_PLAYER]
+PLATFORMS: list[Platform] = [
+    Platform.MEDIA_PLAYER,
+    Platform.NUMBER,
+    Platform.SELECT,
+    Platform.SENSOR,
+    Platform.SWITCH,
+]
 
 
 def _build_receiver(entry: AnthemConfigEntry) -> AnthemReceiver | Gen1Receiver:

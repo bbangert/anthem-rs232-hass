@@ -37,11 +37,9 @@ from .const import (
     POWER_ON_ATTEMPTS,
     POWER_ON_CONFIRM_DELAY,
 )
-from .entity import AnthemEntity
+from .entity import AnthemEntity, main_device_info
 
 if TYPE_CHECKING:
-    from collections.abc import Coroutine
-
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -124,12 +122,7 @@ class AnthemZone(AnthemEntity, MediaPlayerEntity):
         main_device = (DOMAIN, entry.entry_id)
         if zone_key == MAIN_ZONE:
             self._attr_unique_id = f"{entry.entry_id}_main"
-            self._attr_device_info = DeviceInfo(
-                identifiers={main_device},
-                manufacturer=MANUFACTURER,
-                model=model,
-                name=entry.title,
-            )
+            self._attr_device_info = main_device_info(entry, coordinator.data)
         else:
             self._attr_unique_id = f"{entry.entry_id}_{zone_key}"
             self._attr_device_info = DeviceInfo(
@@ -169,21 +162,6 @@ class AnthemZone(AnthemEntity, MediaPlayerEntity):
 
     def _level_to_db(self, volume: float) -> float:
         return self._min_db + volume * (self._max_db - self._min_db)
-
-    async def _send(self, command: Coroutine[Any, Any, Any]) -> None:
-        """Await a receiver command, mapping library errors to HA errors."""
-        try:
-            await command
-        except (
-            CommandError,
-            Gen1CommandError,
-            TimeoutError,
-            ConnectionError,
-            OSError,
-        ) as err:
-            raise HomeAssistantError(
-                f"Command to Anthem receiver failed: {err}"
-            ) from err
 
     async def async_turn_on(self) -> None:
         """Turn the zone on, resending if the receiver stays in standby.

@@ -73,6 +73,20 @@ One `media_player` per zone (main zone, plus Zone 2 where the model has one):
 - Detected signal info (audio format/channels, video resolution) as state
   attributes on the Gen 2 main zone
 
+Plus, on the receiver device:
+
+| Platform | Entities |
+|---|---|
+| `number` | Bass, Treble; **Lip sync** (0–150 ms) and **Dolby Volume Leveler** (0–9) for the current input (Gen 2) |
+| `switch` | Anthem Room Correction, **Dolby Volume** for the current input (Gen 2); 12 V triggers (both generations) |
+| `select` | Front panel brightness, Dolby dynamic range, speaker profile with names read from the receiver (Gen 2) |
+| `sensor` | Serial port (diagnostic, both generations); audio input format/channels/rate and video input resolution (Gen 2, diagnostic) |
+
+Settings entities appear in the device page's *Configuration* and
+*Diagnostic* sections. Trigger switches only take effect when the trigger is
+set to RS-232/IP control on the receiver. The device also reports the
+receiver's software version and (Gen 2) MAC address.
+
 State is **push-based**: the integration enables the receiver's serial
 auto-reports (`ECH1` on Gen 2, `SST1` on Gen 1), so front-panel, IR, and app
 changes appear in Home Assistant immediately. If the serial link drops, the

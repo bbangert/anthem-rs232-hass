@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 from homeassistant.core import callback
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
+from .anthem_rs232 import AnthemReceiver, CommandError
 from .const import DOMAIN, LOGGER, RECONNECT_INITIAL_DELAY, RECONNECT_MAX_DELAY
 
 if TYPE_CHECKING:
@@ -15,12 +16,7 @@ if TYPE_CHECKING:
 
     from homeassistant.core import HomeAssistant
 
-    from .anthem_rs232 import (
-        AnthemReceiver,
-        Gen1Receiver,
-        Gen1ReceiverState,
-        ReceiverState,
-    )
+    from .anthem_rs232 import Gen1Receiver, Gen1ReceiverState, ReceiverState
     from .data import AnthemConfigEntry
 
 type AnthemState = ReceiverState | Gen1ReceiverState
@@ -62,11 +58,33 @@ class AnthemCoordinator(DataUpdateCoordinator[AnthemState]):
             await self.receiver.query_state()
         except (ConnectionError, TimeoutError, OSError) as err:
             raise UpdateFailed(f"Cannot connect to Anthem receiver: {err}") from err
+        await self._query_extras()
         self._unsubscribe = self.receiver.subscribe(self._handle_state)
 
     async def _async_update_data(self) -> AnthemState:
         """Return the current state snapshot (first refresh only; push after)."""
         return self.receiver.state
+
+    async def _query_extras(self) -> None:
+        """Best-effort queries for values query_state() doesn't cover.
+
+        The per-input processing settings (lip sync, Dolby Volume) are not
+        part of the library's startup query round; populate them for the
+        currently selected input. Receivers that don't implement them just
+        error, which is fine.
+        """
+        receiver = self.receiver
+        if not isinstance(receiver, AnthemReceiver):
+            return
+        for query in (
+            receiver.query_lip_sync,
+            receiver.query_dolby_volume,
+            receiver.query_dolby_volume_leveler,
+        ):
+            try:
+                await query()
+            except CommandError, TimeoutError:
+                continue
 
     async def async_shutdown(self) -> None:
         """Stop reconnecting and close the serial connection."""
@@ -111,5 +129,6 @@ class AnthemCoordinator(DataUpdateCoordinator[AnthemState]):
                 delay = min(delay * 2, RECONNECT_MAX_DELAY)
                 continue
             LOGGER.info("Reconnected to Anthem receiver")
+            await self._query_extras()
             self.async_set_updated_data(self.receiver.state)
             return

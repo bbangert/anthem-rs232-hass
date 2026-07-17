@@ -21,6 +21,7 @@ ignore = [
     "TRY003", # long messages outside exception class (HA core style)
     "FBT001", # boolean positional arg (fixed HA entity method signatures)
     "FBT002", # boolean default positional arg
+    "FBT003", # boolean positional call value (descriptor set_fn callbacks)
 ]
 
 [lint.flake8-pytest-style]
