@@ -7,16 +7,16 @@ from typing import Any
 import voluptuous as vol
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 from homeassistant.const import CONF_MODEL, CONF_PORT
-from homeassistant.helpers import selector
+from homeassistant.helpers.selector import SerialPortSelector
 
 from .anthem_rs232 import probe
 from .const import CONF_BAUD_RATE, CONF_GENERATION, DOMAIN, LOGGER
 
+# SerialPortSelector lists the host's serial ports plus remote ports from
+# ESPHome serial proxies; requires "usb" in the manifest dependencies.
 STEP_USER_SCHEMA = vol.Schema(
     {
-        vol.Required(CONF_PORT): selector.TextSelector(
-            selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT),
-        ),
+        vol.Required(CONF_PORT): SerialPortSelector(),
     },
 )
 

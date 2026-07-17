@@ -50,16 +50,14 @@ Copy `custom_components/anthem_rs232/` into your Home Assistant
 ## Configuration
 
 Add the integration via **Settings → Devices & Services → Add Integration →
-Anthem AVR RS-232**. The only input is the serial port:
+Anthem AVR RS-232**. The only input is the serial port, picked from a
+dropdown that lists the host's local serial ports (e.g. `/dev/ttyUSB0`)
+together with any ESPHome serial proxy ports (requires Home Assistant
+2026.7 or later).
 
-- a local device such as `/dev/ttyUSB0`, or
-- any [serialx](https://github.com/puddly/serialx) URL, e.g.
-  `socket://192.168.1.50:4999` (serial-over-TCP bridge) or `esphome://my-node`
-  for an ESPHome UART proxy.
-
-The port is probed automatically (Gen 2 @ 115200, then Gen 1 @ 9600 and
-19200 baud) to detect the model, protocol generation, and baud rate — no other
-settings needed. Wiring is a straight-through DB-9 cable (pin 2 = Tx,
+The selected port is probed automatically (Gen 2 @ 115200, then Gen 1 @ 9600
+and 19200 baud) to detect the model, protocol generation, and baud rate — no
+other settings needed. Wiring is a straight-through DB-9 cable (pin 2 = Tx,
 3 = Rx, 5 = GND).
 
 ## Entities

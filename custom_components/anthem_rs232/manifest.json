@@ -5,6 +5,9 @@
     "@bbangert"
   ],
   "config_flow": true,
+  "dependencies": [
+    "usb"
+  ],
   "documentation": "https://github.com/bbangert/anthem-rs232-hass",
   "integration_type": "device",
   "iot_class": "local_push",
@@ -12,5 +15,5 @@
   "requirements": [
     "serialx[esphome]>=1.8.0"
   ],
-  "version": "0.2.0"
+  "version": "0.3.0"
 }
