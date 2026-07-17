@@ -8,8 +8,14 @@ from typing import TYPE_CHECKING
 from homeassistant.core import callback
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .anthem_rs232 import AnthemReceiver, CommandError
-from .const import DOMAIN, LOGGER, RECONNECT_INITIAL_DELAY, RECONNECT_MAX_DELAY
+from .anthem_rs232 import AnthemReceiver, CommandError, Gen1CommandError, gen1
+from .const import (
+    DOMAIN,
+    GEN2_POWER_ON_QUERY_DELAY,
+    LOGGER,
+    RECONNECT_INITIAL_DELAY,
+    RECONNECT_MAX_DELAY,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -20,6 +26,15 @@ if TYPE_CHECKING:
     from .data import AnthemConfigEntry
 
 type AnthemState = ReceiverState | Gen1ReceiverState
+
+
+def receiver_power_is_on(state: AnthemState) -> bool:
+    """Return True when any zone of the receiver is powered on."""
+    power = getattr(state, "power", None)  # Gen 2 chassis aggregate
+    if power is not None:
+        return power
+    zone_2 = getattr(state, "zone_2", None)
+    return bool(state.main_zone.power or (zone_2 is not None and zone_2.power))
 
 
 class AnthemCoordinator(DataUpdateCoordinator[AnthemState]):
@@ -50,6 +65,15 @@ class AnthemCoordinator(DataUpdateCoordinator[AnthemState]):
         self.receiver = receiver
         self._unsubscribe: Callable[[], None] | None = None
         self._reconnect_task: asyncio.Task | None = None
+        self._power_refresh_task: asyncio.Task | None = None
+        self._last_power: bool | None = None
+        # Gen 1 units document a settle time before accepting commands
+        # after power-on; Gen 2 only needs a moment.
+        self._power_on_query_delay = (
+            GEN2_POWER_ON_QUERY_DELAY
+            if isinstance(receiver, AnthemReceiver)
+            else gen1.DELAY_AFTER_POWER_ON
+        )
 
     async def _async_setup(self) -> None:
         """Connect to the receiver and subscribe to state changes."""
@@ -59,6 +83,7 @@ class AnthemCoordinator(DataUpdateCoordinator[AnthemState]):
         except (ConnectionError, TimeoutError, OSError) as err:
             raise UpdateFailed(f"Cannot connect to Anthem receiver: {err}") from err
         await self._query_extras()
+        self._last_power = receiver_power_is_on(self.receiver.state)
         self._unsubscribe = self.receiver.subscribe(self._handle_state)
 
     async def _async_update_data(self) -> AnthemState:
@@ -91,6 +116,9 @@ class AnthemCoordinator(DataUpdateCoordinator[AnthemState]):
         if self._reconnect_task is not None:
             self._reconnect_task.cancel()
             self._reconnect_task = None
+        if self._power_refresh_task is not None:
+            self._power_refresh_task.cancel()
+            self._power_refresh_task = None
         if self._unsubscribe is not None:
             self._unsubscribe()
             self._unsubscribe = None
@@ -105,7 +133,42 @@ class AnthemCoordinator(DataUpdateCoordinator[AnthemState]):
             self.async_set_update_error(ConnectionError("Connection to receiver lost"))
             self._schedule_reconnect()
             return
+        power = receiver_power_is_on(state)
+        turned_on = power and self._last_power is False
+        self._last_power = power
+        if turned_on:
+            # Most settings can't be queried in standby, so re-query the
+            # full state once the unit is awake -- whether we powered it on
+            # or the front panel / IR remote did.
+            self._schedule_power_on_refresh()
         self.async_set_updated_data(state)
+
+    @callback
+    def _schedule_power_on_refresh(self) -> None:
+        if self._power_refresh_task is not None and not self._power_refresh_task.done():
+            return
+        self._power_refresh_task = self.config_entry.async_create_background_task(
+            self.hass,
+            self._power_on_refresh(),
+            name=f"{DOMAIN} power-on refresh",
+        )
+
+    async def _power_on_refresh(self) -> None:
+        """Re-query everything after the receiver wakes from standby."""
+        await asyncio.sleep(self._power_on_query_delay)
+        try:
+            await self.receiver.query_state()
+        except (
+            ConnectionError,
+            TimeoutError,
+            OSError,
+            CommandError,
+            Gen1CommandError,
+        ) as err:
+            LOGGER.debug("Post power-on state query failed: %s", err)
+            return
+        await self._query_extras()
+        self.async_set_updated_data(self.receiver.state)
 
     @callback
     def _schedule_reconnect(self) -> None:

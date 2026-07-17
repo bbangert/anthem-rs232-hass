@@ -15,7 +15,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .anthem_rs232 import CommandError, Gen1CommandError
 from .const import DOMAIN, MANUFACTURER
-from .coordinator import AnthemCoordinator
+from .coordinator import AnthemCoordinator, receiver_power_is_on
 
 if TYPE_CHECKING:
     from collections.abc import Coroutine
@@ -66,7 +66,15 @@ class AnthemEntity(CoordinatorEntity[AnthemCoordinator]):
 
 
 class AnthemMainDeviceEntity(AnthemEntity):
-    """Base class for entities that live on the main receiver device."""
+    """Base class for entities that live on the main receiver device.
+
+    Settings entities require the receiver to be powered on: in standby
+    Anthem only answers identification and power commands, so everything
+    else is stale/uncontrollable and reads as unavailable. Entities that
+    remain meaningful in standby set ``_requires_receiver_power = False``.
+    """
+
+    _requires_receiver_power = True
 
     def __init__(
         self, coordinator: AnthemCoordinator, entry: AnthemConfigEntry
@@ -74,3 +82,12 @@ class AnthemMainDeviceEntity(AnthemEntity):
         """Attach to the main receiver device."""
         super().__init__(coordinator)
         self._attr_device_info = main_device_info(entry, coordinator.data)
+
+    @property
+    def available(self) -> bool:
+        """Gate settings entities on receiver power."""
+        if not super().available:
+            return False
+        if not self._requires_receiver_power:
+            return True
+        return receiver_power_is_on(self.coordinator.data)

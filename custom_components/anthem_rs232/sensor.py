@@ -29,6 +29,7 @@ class AnthemSensorDescription(SensorEntityDescription):
     """Describes an Anthem sensor entity."""
 
     value_fn: Callable[[AnthemConfigEntry, Any], Any]
+    requires_power: bool = True
 
 
 def _enum_label(member: Any) -> str | None:
@@ -41,6 +42,7 @@ SERIAL_PORT_SENSOR = AnthemSensorDescription(
     icon="mdi:serial-port",
     entity_category=EntityCategory.DIAGNOSTIC,
     value_fn=lambda entry, state: entry.data[CONF_PORT],  # noqa: ARG005
+    requires_power=False,
 )
 
 GEN2_SENSORS: tuple[AnthemSensorDescription, ...] = (
@@ -109,6 +111,7 @@ class AnthemSensor(AnthemMainDeviceEntity, SensorEntity):
         super().__init__(coordinator, entry)
         self.entity_description = description
         self._entry = entry
+        self._requires_receiver_power = description.requires_power
         self._attr_unique_id = f"{entry.entry_id}_{description.key}"
 
     @property

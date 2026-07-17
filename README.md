@@ -87,6 +87,13 @@ Settings entities appear in the device page's *Configuration* and
 set to RS-232/IP control on the receiver. The device also reports the
 receiver's software version and (Gen 2) MAC address.
 
+While the receiver is in **standby**, the settings and signal entities show
+as unavailable (Anthem only answers identification and power commands in
+standby); the media players and the serial port sensor stay available. When
+the receiver powers on — from Home Assistant, the front panel, or the IR
+remote — the integration re-queries the full state so every entity
+repopulates (after the wake-up settle time on Gen 1 units).
+
 State is **push-based**: the integration enables the receiver's serial
 auto-reports (`ECH1` on Gen 2, `SST1` on Gen 1), so front-panel, IR, and app
 changes appear in Home Assistant immediately. If the serial link drops, the
