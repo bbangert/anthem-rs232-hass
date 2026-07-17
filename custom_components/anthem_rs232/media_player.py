@@ -9,6 +9,7 @@ model's source table.
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.media_player import (
@@ -29,7 +30,13 @@ from .anthem_rs232 import (
     Gen1CommandError,
     gen1,
 )
-from .const import DOMAIN, MANUFACTURER
+from .const import (
+    DOMAIN,
+    LOGGER,
+    MANUFACTURER,
+    POWER_ON_ATTEMPTS,
+    POWER_ON_CONFIRM_DELAY,
+)
 from .entity import AnthemEntity
 
 if TYPE_CHECKING:
@@ -179,8 +186,39 @@ class AnthemZone(AnthemEntity, MediaPlayerEntity):
             ) from err
 
     async def async_turn_on(self) -> None:
-        """Turn the zone on."""
-        await self._send(self._player.power_on())
+        """Turn the zone on, resending if the receiver stays in standby.
+
+        A receiver in standby can swallow power-on frames without any
+        error (the command is fire-and-forget on the wire). Confirm the
+        zone actually reports on with a power query — one of the few
+        queries Anthem answers even in standby — and resend if not.
+        """
+        for attempt in range(1, POWER_ON_ATTEMPTS + 1):
+            await self._send(self._player.power_on())
+            await asyncio.sleep(POWER_ON_CONFIRM_DELAY)
+            if await self._power_on_confirmed():
+                return
+            LOGGER.debug(
+                "Zone power-on not confirmed (attempt %d/%d)",
+                attempt,
+                POWER_ON_ATTEMPTS,
+            )
+        raise HomeAssistantError(
+            f"Receiver did not confirm power on after {POWER_ON_ATTEMPTS} attempts"
+        )
+
+    async def _power_on_confirmed(self) -> bool:
+        """Return True if the zone reports powered on."""
+        try:
+            return bool(await self._player.query_power())
+        except (
+            CommandError,
+            Gen1CommandError,
+            TimeoutError,
+            ConnectionError,
+            OSError,
+        ):
+            return False
 
     async def async_turn_off(self) -> None:
         """Turn the zone off."""
