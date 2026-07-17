@@ -13,7 +13,7 @@
     "anthem_rs232"
   ],
   "requirements": [
-    "anthem-rs232 @ git+https://github.com/home-assistant-libs/anthem-rs232.git"
+    "anthem-rs232@git+https://github.com/home-assistant-libs/anthem-rs232.git"
   ],
   "version": "0.1.0"
 }
