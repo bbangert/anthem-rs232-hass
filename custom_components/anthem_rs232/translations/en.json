@@ -1,0 +1,19 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "description": "Set up an Anthem receiver connected over RS-232. The port can be a local serial device (for example /dev/ttyUSB0) or a serialx URL such as socket://192.168.1.50:4999 or esphome://my-node. The port is probed automatically to detect the model, protocol generation, and baud rate.",
+                "data": {
+                    "port": "Serial port"
+                }
+            }
+        },
+        "error": {
+            "cannot_connect": "Failed to open the serial port.",
+            "no_receiver": "No Anthem receiver responded on this port. Check the cable (straight-wired DB-9) and that the receiver is powered."
+        },
+        "abort": {
+            "already_configured": "This serial port is already configured."
+        }
+    }
+}
