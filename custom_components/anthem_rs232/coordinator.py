@@ -15,13 +15,12 @@ if TYPE_CHECKING:
 
     from homeassistant.core import HomeAssistant
 
-    from anthem_rs232 import (
+    from .anthem_rs232 import (
         AnthemReceiver,
         Gen1Receiver,
         Gen1ReceiverState,
         ReceiverState,
     )
-
     from .data import AnthemConfigEntry
 
 type AnthemState = ReceiverState | Gen1ReceiverState

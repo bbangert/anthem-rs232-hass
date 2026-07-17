@@ -12,8 +12,7 @@ from typing import TYPE_CHECKING
 
 from homeassistant.const import CONF_MODEL, CONF_PORT, Platform
 
-from anthem_rs232 import AnthemReceiver, Gen1Receiver, gen1, models
-
+from .anthem_rs232 import AnthemReceiver, Gen1Receiver, gen1, models
 from .const import CONF_BAUD_RATE, CONF_GENERATION
 from .coordinator import AnthemCoordinator
 from .data import AnthemData

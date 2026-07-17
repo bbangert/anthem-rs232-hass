@@ -21,7 +21,7 @@ from homeassistant.const import CONF_MODEL
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.device_registry import DeviceInfo
 
-from anthem_rs232 import (
+from .anthem_rs232 import (
     MAX_VOLUME_DB,
     MIN_VOLUME_DB,
     AudioListeningMode,
@@ -29,7 +29,6 @@ from anthem_rs232 import (
     Gen1CommandError,
     gen1,
 )
-
 from .const import DOMAIN, MANUFACTURER
 from .entity import AnthemEntity
 
@@ -39,8 +38,7 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-    from anthem_rs232 import AnthemReceiver, Gen1Receiver
-
+    from .anthem_rs232 import AnthemReceiver, Gen1Receiver
     from .coordinator import AnthemCoordinator
     from .data import AnthemConfigEntry
 

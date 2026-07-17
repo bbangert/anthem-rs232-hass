@@ -9,8 +9,7 @@ from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 from homeassistant.const import CONF_MODEL, CONF_PORT
 from homeassistant.helpers import selector
 
-from anthem_rs232 import probe
-
+from .anthem_rs232 import probe
 from .const import CONF_BAUD_RATE, CONF_GENERATION, DOMAIN, LOGGER
 
 STEP_USER_SCHEMA = vol.Schema(

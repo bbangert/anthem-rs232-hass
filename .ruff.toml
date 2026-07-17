@@ -2,6 +2,9 @@
 
 target-version = "py313"
 
+# The vendored anthem-rs232 library keeps its upstream style.
+extend-exclude = ["custom_components/anthem_rs232/anthem_rs232"]
+
 [lint]
 select = [
     "ALL",
