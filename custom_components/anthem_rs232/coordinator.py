@@ -37,6 +37,22 @@ def receiver_power_is_on(state: AnthemState) -> bool:
     return bool(state.main_zone.power or (zone_2 is not None and zone_2.power))
 
 
+def receiver_power_known_off(state: AnthemState) -> bool:
+    """Return True when the receiver definitively reports standby.
+
+    Distinct from ``not receiver_power_is_on``: unknown power (all zones
+    ``None``) is not "known off", so a receiver whose power state hasn't
+    been read yet still gets the full state query.
+    """
+    power = getattr(state, "power", None)  # Gen 2 chassis aggregate
+    if power is not None:
+        return not power
+    zone_2 = getattr(state, "zone_2", None)
+    zones = [state.main_zone.power, zone_2.power if zone_2 is not None else None]
+    known = [z for z in zones if z is not None]
+    return bool(known) and not any(known)
+
+
 class AnthemCoordinator(DataUpdateCoordinator[AnthemState]):
     """Push-based coordinator: state arrives via the receiver's auto-reports.
 
@@ -79,12 +95,27 @@ class AnthemCoordinator(DataUpdateCoordinator[AnthemState]):
         """Connect to the receiver and subscribe to state changes."""
         try:
             await self.receiver.connect()
-            await self.receiver.query_state()
+            await self._refresh_full_state()
         except (ConnectionError, TimeoutError, OSError) as err:
             raise UpdateFailed(f"Cannot connect to Anthem receiver: {err}") from err
-        await self._query_extras()
         self._last_power = receiver_power_is_on(self.receiver.state)
         self._unsubscribe = self.receiver.subscribe(self._handle_state)
+
+    async def _refresh_full_state(self) -> None:
+        """Run query_state + extras, unless the receiver is in standby.
+
+        In standby only identification and power commands are answered
+        (and some firmwares answer everything else with noise or bare
+        terminators), so the full round is 30+ queries each eating a
+        timeout. Skip it; the power-on refresh repopulates on wake.
+        """
+        if receiver_power_known_off(self.receiver.state):
+            LOGGER.debug(
+                "Receiver is in standby; deferring the full state query until power-on"
+            )
+            return
+        await self.receiver.query_state()
+        await self._query_extras()
 
     async def _async_update_data(self) -> AnthemState:
         """Return the current state snapshot (first refresh only; push after)."""
@@ -186,12 +217,12 @@ class AnthemCoordinator(DataUpdateCoordinator[AnthemState]):
             await asyncio.sleep(delay)
             try:
                 await self.receiver.connect()
-                await self.receiver.query_state()
+                await self._refresh_full_state()
             except (ConnectionError, TimeoutError, OSError) as err:
                 LOGGER.debug("Reconnect failed (%s); retrying in %.0f s", err, delay)
                 delay = min(delay * 2, RECONNECT_MAX_DELAY)
                 continue
             LOGGER.info("Reconnected to Anthem receiver")
-            await self._query_extras()
+            self._last_power = receiver_power_is_on(self.receiver.state)
             self.async_set_updated_data(self.receiver.state)
             return
