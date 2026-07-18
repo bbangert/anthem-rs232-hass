@@ -104,6 +104,10 @@ class AnthemZone(AnthemEntity, MediaPlayerEntity):
     _attr_device_class = MediaPlayerDeviceClass.RECEIVER
     _attr_supported_features = BASE_FEATURES
     _attr_name = None
+    # Serial state can be stale (a receiver in standby swallows frames);
+    # the receiver has discrete power commands, so present separate
+    # on/off controls instead of a state-guessing toggle.
+    _attr_assumed_state = True
 
     _min_db: float
     _max_db: float
@@ -207,6 +211,18 @@ class AnthemZone(AnthemEntity, MediaPlayerEntity):
     async def async_turn_off(self) -> None:
         """Turn the zone off."""
         await self._send(self._player.power_off())
+
+    async def async_toggle(self) -> None:
+        """Toggle with discrete power commands; unknown state powers on.
+
+        The default toggle sends power-off when the state is unknown;
+        for a serial device with discrete commands, powering on is the
+        safe resolution.
+        """
+        if self.state is MediaPlayerState.ON:
+            await self.async_turn_off()
+        else:
+            await self.async_turn_on()
 
     async def async_set_volume_level(self, volume: float) -> None:
         """Set the zone volume (the receiver rounds to its volume grid)."""
