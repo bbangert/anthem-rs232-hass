@@ -212,18 +212,6 @@ class AnthemZone(AnthemEntity, MediaPlayerEntity):
         """Turn the zone off."""
         await self._send(self._player.power_off())
 
-    async def async_toggle(self) -> None:
-        """Toggle with discrete power commands; unknown state powers on.
-
-        The default toggle sends power-off when the state is unknown;
-        for a serial device with discrete commands, powering on is the
-        safe resolution.
-        """
-        if self.state is MediaPlayerState.ON:
-            await self.async_turn_off()
-        else:
-            await self.async_turn_on()
-
     async def async_set_volume_level(self, volume: float) -> None:
         """Set the zone volume (the receiver rounds to its volume grid)."""
         await self._send(self._player.set_volume(self._level_to_db(volume)))
