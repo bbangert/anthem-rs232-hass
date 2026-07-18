@@ -13,10 +13,11 @@ CONF_BAUD_RATE = "baud_rate"
 RECONNECT_INITIAL_DELAY = 5.0
 RECONNECT_MAX_DELAY = 300.0
 
-# A receiver in standby can swallow power-on frames: confirm with a power
-# query and resend, up to this many attempts.
-POWER_ON_ATTEMPTS = 3
+# A receiver in standby can swallow power-on frames. Send one power-on;
+# if the zone doesn't confirm on within POWER_ON_CONFIRM_DELAY, send
+# POWER_ON_BURST_COUNT power-ons back-to-back and confirm once more.
 POWER_ON_CONFIRM_DELAY = 1.0
+POWER_ON_BURST_COUNT = 3
 
 # Seconds to wait after a Gen 2 receiver reports power-on before running the
 # full state re-query. (Gen 1 uses the library's DELAY_AFTER_POWER_ON.)

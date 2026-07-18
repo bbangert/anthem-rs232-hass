@@ -34,7 +34,7 @@ from .const import (
     DOMAIN,
     LOGGER,
     MANUFACTURER,
-    POWER_ON_ATTEMPTS,
+    POWER_ON_BURST_COUNT,
     POWER_ON_CONFIRM_DELAY,
 )
 from .entity import AnthemEntity, main_device_info
@@ -164,25 +164,31 @@ class AnthemZone(AnthemEntity, MediaPlayerEntity):
         return self._min_db + volume * (self._max_db - self._min_db)
 
     async def async_turn_on(self) -> None:
-        """Turn the zone on, resending if the receiver stays in standby.
+        """Turn the zone on, bursting if the receiver stays in standby.
 
         A receiver in standby can swallow power-on frames without any
-        error (the command is fire-and-forget on the wire). Confirm the
-        zone actually reports on with a power query — one of the few
-        queries Anthem answers even in standby — and resend if not.
+        error (the command is fire-and-forget on the wire). Send one
+        power-on and confirm the zone reports on with a power query —
+        one of the few queries Anthem answers even in standby. If it
+        doesn't confirm within the delay, send a burst of power-ons
+        back-to-back and confirm once more.
         """
-        for attempt in range(1, POWER_ON_ATTEMPTS + 1):
+        await self._send(self._player.power_on())
+        await asyncio.sleep(POWER_ON_CONFIRM_DELAY)
+        if await self._power_on_confirmed():
+            return
+        LOGGER.debug(
+            "Zone power-on not confirmed within %.0f s; sending burst of %d",
+            POWER_ON_CONFIRM_DELAY,
+            POWER_ON_BURST_COUNT,
+        )
+        for _ in range(POWER_ON_BURST_COUNT):
             await self._send(self._player.power_on())
-            await asyncio.sleep(POWER_ON_CONFIRM_DELAY)
-            if await self._power_on_confirmed():
-                return
-            LOGGER.debug(
-                "Zone power-on not confirmed (attempt %d/%d)",
-                attempt,
-                POWER_ON_ATTEMPTS,
-            )
+        await asyncio.sleep(POWER_ON_CONFIRM_DELAY)
+        if await self._power_on_confirmed():
+            return
         raise HomeAssistantError(
-            f"Receiver did not confirm power on after {POWER_ON_ATTEMPTS} attempts"
+            "Receiver did not confirm power on after the power-on burst"
         )
 
     async def _power_on_confirmed(self) -> bool:
