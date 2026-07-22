@@ -39,13 +39,15 @@ Copy `custom_components/anthem_rs232/` into your Home Assistant
 
 > [!NOTE]
 > The [anthem-rs232](https://github.com/home-assistant-libs/anthem-rs232)
-> library has no PyPI release yet, so its package is **vendored** into the
-> integration (`custom_components/anthem_rs232/anthem_rs232/`, currently at
-> upstream commit `2a499b9`). The only
-> requirement Home Assistant installs from PyPI is
-> [serialx](https://pypi.org/project/serialx/), the async serial transport.
-> Once the library is released on PyPI, the vendored copy will be replaced by
-> a pinned requirement.
+> driver has no PyPI release, so its package is **vendored** into the
+> integration at `custom_components/anthem_rs232/anthem_rs232/` (tracking
+> upstream `v0.1.0`, commit `85d82a4`). Everything else is installed from PyPI
+> via the manifest `requirements`:
+> [serial-toolkit](https://pypi.org/project/serial-toolkit/) (the serialkit
+> toolkit the driver runs on — imported as `serialkit`) and
+> [serialx](https://pypi.org/project/serialx/) (the async serial transport).
+> Requirements are PyPI-only on purpose: a `git+https://…` requirement passes
+> CI but fails to install at HA runtime.
 
 ## Configuration
 

@@ -1,4 +1,11 @@
-"""DataUpdateCoordinator wrapping an Anthem receiver serial connection."""
+"""DataUpdateCoordinator wrapping an Anthem receiver serial connection.
+
+Reconnect is owned by the vendored serialkit runtime, not this coordinator: on
+a dropped link the library fails in-flight work, notifies subscribers with
+``None``, backs off, reopens, re-runs the connect handshake, and notifies
+again. The coordinator reflects those notifications into HA and re-queries the
+full state once a reconnect delivers a fresh snapshot.
+"""
 
 from __future__ import annotations
 
@@ -7,14 +14,13 @@ from typing import TYPE_CHECKING
 
 from homeassistant.core import callback
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from serialkit import ConnectionLostError, SerialKitError
 
-from .anthem_rs232 import AnthemReceiver, CommandError, Gen1CommandError, gen1
+from .anthem_rs232 import AnthemReceiver, gen1
 from .const import (
     DOMAIN,
     GEN2_POWER_ON_QUERY_DELAY,
     LOGGER,
-    RECONNECT_INITIAL_DELAY,
-    RECONNECT_MAX_DELAY,
 )
 
 if TYPE_CHECKING:
@@ -58,8 +64,9 @@ class AnthemCoordinator(DataUpdateCoordinator[AnthemState]):
 
     The library keeps its own state current from unsolicited serial frames and
     notifies subscribers on every change, so there is no polling interval. The
-    subscriber callback receives ``None`` when the serial connection drops, at
-    which point a background task reconnects with exponential backoff.
+    subscriber callback receives ``None`` when the serial connection drops;
+    serialkit reconnects on its own and the coordinator re-queries the full
+    state when the fresh snapshot arrives.
     """
 
     config_entry: AnthemConfigEntry
@@ -80,8 +87,7 @@ class AnthemCoordinator(DataUpdateCoordinator[AnthemState]):
         )
         self.receiver = receiver
         self._unsubscribe: Callable[[], None] | None = None
-        self._reconnect_task: asyncio.Task | None = None
-        self._power_refresh_task: asyncio.Task | None = None
+        self._refresh_task: asyncio.Task | None = None
         self._last_power: bool | None = None
         # Gen 1 units document a settle time before accepting commands
         # after power-on; Gen 2 only needs a moment.
@@ -96,7 +102,7 @@ class AnthemCoordinator(DataUpdateCoordinator[AnthemState]):
         try:
             await self.receiver.connect()
             await self._refresh_full_state()
-        except (ConnectionError, TimeoutError, OSError) as err:
+        except (SerialKitError, ConnectionError, OSError) as err:
             raise UpdateFailed(f"Cannot connect to Anthem receiver: {err}") from err
         self._last_power = receiver_power_is_on(self.receiver.state)
         self._unsubscribe = self.receiver.subscribe(self._handle_state)
@@ -139,17 +145,14 @@ class AnthemCoordinator(DataUpdateCoordinator[AnthemState]):
         ):
             try:
                 await query()
-            except CommandError, TimeoutError:
+            except SerialKitError:
                 continue
 
     async def async_shutdown(self) -> None:
-        """Stop reconnecting and close the serial connection."""
-        if self._reconnect_task is not None:
-            self._reconnect_task.cancel()
-            self._reconnect_task = None
-        if self._power_refresh_task is not None:
-            self._power_refresh_task.cancel()
-            self._power_refresh_task = None
+        """Unsubscribe and close the serial connection (serialkit stops)."""
+        if self._refresh_task is not None:
+            self._refresh_task.cancel()
+            self._refresh_task = None
         if self._unsubscribe is not None:
             self._unsubscribe()
             self._unsubscribe = None
@@ -158,71 +161,52 @@ class AnthemCoordinator(DataUpdateCoordinator[AnthemState]):
 
     @callback
     def _handle_state(self, state: AnthemState | None) -> None:
-        """Handle a state notification from the library's read loop."""
+        """Handle a state notification from the library's read loop.
+
+        ``None`` means the serial link dropped; serialkit reconnects on its
+        own, so we only surface the outage. When the fresh snapshot arrives
+        after a reconnect we re-query the full state (serialkit's on_connect
+        only identifies + enables auto-reports).
+        """
         if state is None:
-            LOGGER.warning("Connection to Anthem receiver lost; will reconnect")
-            self.async_set_update_error(ConnectionError("Connection to receiver lost"))
-            self._schedule_reconnect()
+            LOGGER.warning(
+                "Connection to Anthem receiver lost; serialkit will reconnect"
+            )
+            self.async_set_update_error(
+                ConnectionLostError("Connection to receiver lost")
+            )
             return
+        reconnected = not self.last_update_success
         power = receiver_power_is_on(state)
         turned_on = power and self._last_power is False
         self._last_power = power
-        if turned_on:
-            # Most settings can't be queried in standby, so re-query the
-            # full state once the unit is awake -- whether we powered it on
-            # or the front panel / IR remote did.
-            self._schedule_power_on_refresh()
+        if reconnected:
+            # serialkit reopened the link; repopulate the full state.
+            self._schedule_refresh(delay=0.0)
+        elif turned_on:
+            # Most settings can't be queried in standby, so re-query the full
+            # state once the unit is awake -- whether we powered it on or the
+            # front panel / IR remote did.
+            self._schedule_refresh(delay=self._power_on_query_delay)
         self.async_set_updated_data(state)
 
     @callback
-    def _schedule_power_on_refresh(self) -> None:
-        if self._power_refresh_task is not None and not self._power_refresh_task.done():
+    def _schedule_refresh(self, *, delay: float) -> None:
+        if self._refresh_task is not None and not self._refresh_task.done():
             return
-        self._power_refresh_task = self.config_entry.async_create_background_task(
+        self._refresh_task = self.config_entry.async_create_background_task(
             self.hass,
-            self._power_on_refresh(),
-            name=f"{DOMAIN} power-on refresh",
+            self._refresh_after(delay),
+            name=f"{DOMAIN} state refresh",
         )
 
-    async def _power_on_refresh(self) -> None:
-        """Re-query everything after the receiver wakes from standby."""
-        await asyncio.sleep(self._power_on_query_delay)
-        try:
-            await self.receiver.query_state()
-        except (
-            ConnectionError,
-            TimeoutError,
-            OSError,
-            CommandError,
-            Gen1CommandError,
-        ) as err:
-            LOGGER.debug("Post power-on state query failed: %s", err)
-            return
-        await self._query_extras()
-        self.async_set_updated_data(self.receiver.state)
-
-    @callback
-    def _schedule_reconnect(self) -> None:
-        if self._reconnect_task is not None and not self._reconnect_task.done():
-            return
-        self._reconnect_task = self.config_entry.async_create_background_task(
-            self.hass,
-            self._reconnect(),
-            name=f"{DOMAIN} reconnect",
-        )
-
-    async def _reconnect(self) -> None:
-        delay = RECONNECT_INITIAL_DELAY
-        while True:
+    async def _refresh_after(self, delay: float) -> None:
+        """Re-query the full state (after an optional settle delay)."""
+        if delay:
             await asyncio.sleep(delay)
-            try:
-                await self.receiver.connect()
-                await self._refresh_full_state()
-            except (ConnectionError, TimeoutError, OSError) as err:
-                LOGGER.debug("Reconnect failed (%s); retrying in %.0f s", err, delay)
-                delay = min(delay * 2, RECONNECT_MAX_DELAY)
-                continue
-            LOGGER.info("Reconnected to Anthem receiver")
-            self._last_power = receiver_power_is_on(self.receiver.state)
-            self.async_set_updated_data(self.receiver.state)
+        try:
+            await self._refresh_full_state()
+        except (SerialKitError, ConnectionError, OSError) as err:
+            LOGGER.debug("State refresh failed: %s", err)
             return
+        self.async_set_updated_data(self.receiver.state)

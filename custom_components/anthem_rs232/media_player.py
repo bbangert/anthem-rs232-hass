@@ -21,13 +21,12 @@ from homeassistant.components.media_player import (
 from homeassistant.const import CONF_MODEL
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.device_registry import DeviceInfo
+from serialkit import SerialKitError
 
 from .anthem_rs232 import (
     MAX_VOLUME_DB,
     MIN_VOLUME_DB,
     AudioListeningMode,
-    CommandError,
-    Gen1CommandError,
     gen1,
 )
 from .const import (
@@ -199,13 +198,7 @@ class AnthemZone(AnthemEntity, MediaPlayerEntity):
         """Return True if the zone reports powered on."""
         try:
             return bool(await self._player.query_power())
-        except (
-            CommandError,
-            Gen1CommandError,
-            TimeoutError,
-            ConnectionError,
-            OSError,
-        ):
+        except (SerialKitError, ConnectionError, OSError):
             return False
 
     async def async_turn_off(self) -> None:

@@ -10,8 +10,8 @@ MANUFACTURER = "Anthem"
 CONF_GENERATION = "generation"
 CONF_BAUD_RATE = "baud_rate"
 
-RECONNECT_INITIAL_DELAY = 5.0
-RECONNECT_MAX_DELAY = 300.0
+# Reconnect/backoff is owned by the vendored serialkit runtime, not this
+# integration, so no reconnect-delay constants live here.
 
 # A receiver in standby can swallow power-on frames. Send one power-on;
 # if the zone doesn't confirm on within POWER_ON_CONFIRM_DELAY, send

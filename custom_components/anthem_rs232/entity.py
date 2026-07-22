@@ -12,8 +12,8 @@ from homeassistant.helpers.device_registry import (
     format_mac,
 )
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from serialkit import SerialKitError
 
-from .anthem_rs232 import CommandError, Gen1CommandError
 from .const import DOMAIN, MANUFACTURER
 from .coordinator import AnthemCoordinator, receiver_power_is_on
 
@@ -53,13 +53,9 @@ class AnthemEntity(CoordinatorEntity[AnthemCoordinator]):
         """Await a receiver command, mapping library errors to HA errors."""
         try:
             await command
-        except (
-            CommandError,
-            Gen1CommandError,
-            TimeoutError,
-            ConnectionError,
-            OSError,
-        ) as err:
+        except (SerialKitError, ConnectionError, OSError) as err:
+            # SerialKitError covers CommandTimeoutError, ConnectionLostError,
+            # and the ProtocolError family (CommandError/Gen1CommandError).
             raise HomeAssistantError(
                 f"Command to Anthem receiver failed: {err}"
             ) from err

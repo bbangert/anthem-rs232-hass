@@ -13,7 +13,8 @@
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/bbangert/anthem-rs232-hass/issues",
   "requirements": [
-    "serialx[esphome]>=1.8.0"
+    "serial-toolkit>=0.1.2",
+    "serialx[esphome]>=1.8.2"
   ],
-  "version": "0.4.7"
+  "version": "0.5.0"
 }
