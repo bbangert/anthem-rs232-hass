@@ -198,7 +198,7 @@ class AnthemZone(AnthemEntity, MediaPlayerEntity):
         """Return True if the zone reports powered on."""
         try:
             return bool(await self._player.query_power())
-        except (SerialKitError, ConnectionError, OSError):
+        except SerialKitError, ConnectionError, OSError:
             return False
 
     async def async_turn_off(self) -> None:
