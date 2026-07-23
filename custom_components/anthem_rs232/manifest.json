@@ -16,5 +16,5 @@
     "serial-toolkit>=0.1.2",
     "serialx[esphome]>=1.8.2"
   ],
-  "version": "0.5.0"
+  "version": "0.5.1"
 }

@@ -182,16 +182,16 @@ class AnthemCoordinator(DataUpdateCoordinator[AnthemState]):
         self._last_power = power
         if reconnected:
             # serialkit reopened the link; repopulate the full state.
-            self._schedule_refresh(delay=0.0)
+            self._schedule_state_refresh(delay=0.0)
         elif turned_on:
             # Most settings can't be queried in standby, so re-query the full
             # state once the unit is awake -- whether we powered it on or the
             # front panel / IR remote did.
-            self._schedule_refresh(delay=self._power_on_query_delay)
+            self._schedule_state_refresh(delay=self._power_on_query_delay)
         self.async_set_updated_data(state)
 
     @callback
-    def _schedule_refresh(self, *, delay: float) -> None:
+    def _schedule_state_refresh(self, *, delay: float) -> None:
         if self._refresh_task is not None and not self._refresh_task.done():
             return
         self._refresh_task = self.config_entry.async_create_background_task(
